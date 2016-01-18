@@ -132,6 +132,8 @@ _glamor_create_tex(glamor_screen_private *glamor_priv,
     if (format == glamor_priv->one_channel_format && format == GL_RED)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_A, GL_RED);
     glamor_priv->suppress_gl_out_of_memory_logging = true;
+    if (format == GL_RGBA)
+	    format = GL_BGRA;
     glTexImage2D(GL_TEXTURE_2D, 0, format, w, h, 0,
                  format, GL_UNSIGNED_BYTE, NULL);
     glamor_priv->suppress_gl_out_of_memory_logging = false;
