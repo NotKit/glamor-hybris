@@ -31,7 +31,7 @@ glamor_format_for_pixmap(PixmapPtr pixmap, GLenum *format, GLenum *type)
     case 24:
     case 32:
         *format = GL_BGRA;
-        *type = GL_UNSIGNED_INT_8_8_8_8_REV;
+        *type = GL_UNSIGNED_BYTE;//GL_UNSIGNED_INT_8_8_8_8_REV;
         break;
     case 16:
         *format = GL_RGB;
