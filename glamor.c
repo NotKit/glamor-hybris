@@ -189,6 +189,9 @@ glamor_create_pixmap(ScreenPtr screen, int w, int h, int depth,
     if (w > 32767 || h > 32767)
         return NullPixmap;
 
+    if (depth == 8) {
+        return fbCreatePixmap(screen, w, h, depth, usage);
+    }
     if ((usage == GLAMOR_CREATE_PIXMAP_CPU
          || (usage == CREATE_PIXMAP_USAGE_GLYPH_PICTURE &&
              w <= glamor_priv->glyph_max_dim &&
