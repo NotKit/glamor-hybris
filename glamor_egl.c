@@ -29,6 +29,7 @@
 
 #include "dix-config.h"
 
+#define GLAMOR_GLES2
 #define GLAMOR_FOR_XORG
 #include <unistd.h>
 #include <fcntl.h>
@@ -307,7 +308,7 @@ glamor_egl_create_textured_pixmap_from_gbm_bo(PixmapPtr pixmap,
     glamor_make_current(glamor_priv);
 
     image = eglCreateImageKHR(glamor_egl->display,
-                              glamor_egl->context,
+                              /* glamor_egl->context*/ EGL_NO_CONTEXT,
                               EGL_NATIVE_PIXMAP_KHR, bo, NULL);
     if (image == EGL_NO_IMAGE_KHR) {
         glamor_set_pixmap_type(pixmap, GLAMOR_DRM_ONLY);
@@ -751,6 +752,21 @@ glamor_egl_init(ScrnInfoPtr scrn, int fd)
         EGL_NONE
     };
 
+    const EGLint config_attribs_gles2[] = {
+        EGL_RED_SIZE, 8,
+        EGL_GREEN_SIZE, 8,
+        EGL_BLUE_SIZE, 8,
+        EGL_ALPHA_SIZE, 8,
+        EGL_DEPTH_SIZE, 24,
+        EGL_STENCIL_SIZE, 8,
+        EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
+	    EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
+	    EGL_SURFACE_TYPE, EGL_PBUFFER_BIT,
+        EGL_NONE
+    };
+    EGLint num_configs;
+    EGLConfig egl_config;
+
     glamor_identify(0);
     glamor_egl = calloc(sizeof(*glamor_egl), 1);
     if (glamor_egl == NULL)
@@ -808,7 +824,6 @@ glamor_egl_init(ScrnInfoPtr scrn, int fd)
 		goto error;  \
 	}
 
-    GLAMOR_CHECK_EGL_EXTENSION(MESA_drm_image);
     GLAMOR_CHECK_EGL_EXTENSION(KHR_gl_renderbuffer_image);
 #ifdef GLAMOR_GLES2
     GLAMOR_CHECK_EGL_EXTENSIONS(KHR_surfaceless_context, KHR_surfaceless_gles2);
@@ -824,14 +839,21 @@ glamor_egl_init(ScrnInfoPtr scrn, int fd)
 #else
     glamor_egl->context = NULL;
 #endif
-    if (!glamor_egl->context) {
-        glamor_egl->context = eglCreateContext(glamor_egl->display,
-                                               NULL, EGL_NO_CONTEXT,
-                                               config_attribs);
-        if (glamor_egl->context == EGL_NO_CONTEXT) {
-            xf86DrvMsg(scrn->scrnIndex, X_ERROR, "Failed to create EGL context\n");
-            goto error;
-        }
+    if (!eglChooseConfig(glamor_egl->display, config_attribs_gles2, 0, 0, &num_configs)) {
+        ErrorF("eglChooseConfig Fail to get Confings\n");
+        return false;
+    }
+
+    if (!eglChooseConfig(glamor_egl->display, config_attribs_gles2, &egl_config, 1, &num_configs)) {
+        ErrorF("Fail to get Config, num_configs=%d\n",num_configs);
+        return false;
+    }
+    glamor_egl->context = eglCreateContext(glamor_egl->display,
+                                           egl_config, EGL_NO_CONTEXT,
+                                           config_attribs);
+    if (glamor_egl->context == EGL_NO_CONTEXT) {
+        xf86DrvMsg(scrn->scrnIndex, X_ERROR, "Failed to create EGL context\n");
+        goto error;
     }
 
     if (!eglMakeCurrent(glamor_egl->display,
