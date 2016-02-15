@@ -389,6 +389,7 @@ glamor_xv_render(glamor_port_private *port_priv)
             glDrawArrays(GL_TRIANGLE_FAN, 0, 3);
         }
     }
+    glFinish();
     glDisable(GL_SCISSOR_TEST);
 
     glDisableVertexAttribArray(GLAMOR_VERTEX_POS);
