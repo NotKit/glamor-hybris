@@ -620,9 +620,8 @@ gl_iformat_for_pixmap(PixmapPtr pixmap)
     glamor_screen_private *glamor_priv =
         glamor_get_screen_private((pixmap)->drawable.pScreen);
 
-    if (glamor_priv->gl_flavor == GLAMOR_GL_DESKTOP &&
-        ((pixmap)->drawable.depth == 1 || (pixmap)->drawable.depth == 8)) {
-        return glamor_priv->one_channel_format;
+    if (((pixmap)->drawable.depth == 1 || (pixmap)->drawable.depth == 8)) {
+        return GL_ALPHA;
     } else {
         return GL_RGBA;
     }
