@@ -189,7 +189,8 @@ glamor_create_pixmap(ScreenPtr screen, int w, int h, int depth,
     if (w > 32767 || h > 32767)
         return NullPixmap;
 
-    if (depth == 8 && usage != GLAMOR_CREATE_FBO_NO_FBO) {
+    if (depth == 8 && usage != GLAMOR_CREATE_FBO_NO_FBO ||
+	(w == h && w == 24 && depth == 32)) {
         return fbCreatePixmap(screen, w, h, depth, usage);
     }
     if ((usage == GLAMOR_CREATE_PIXMAP_CPU
