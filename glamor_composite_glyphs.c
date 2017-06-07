@@ -284,7 +284,16 @@ glamor_glyphs_flush(CARD8 op, PicturePtr src, PicturePtr dst,
             break;
         prog++;
     }
+
     glamor_flush();
+    {   // workround the lack of glyphs for firefox.
+        GLint fbo = 0;
+        glGetIntegerv(GL_FRAMEBUFFER_BINDING, &fbo);
+        if(0 != fbo) {
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+        }
+    }
 
     glDisable(GL_SCISSOR_TEST);
 

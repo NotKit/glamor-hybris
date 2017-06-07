@@ -189,6 +189,9 @@ glamor_create_pixmap(ScreenPtr screen, int w, int h, int depth,
     if (w > 32767 || h > 32767)
         return NullPixmap;
 
+    if (depth == 8 && usage != GLAMOR_CREATE_FBO_NO_FBO) {
+        return fbCreatePixmap(screen, w, h, depth, usage);
+    }
     if ((usage == GLAMOR_CREATE_PIXMAP_CPU
          || (usage == CREATE_PIXMAP_USAGE_GLYPH_PICTURE &&
              w <= glamor_priv->glyph_max_dim &&
@@ -200,11 +203,6 @@ glamor_create_pixmap(ScreenPtr screen, int w, int h, int depth,
         return fbCreatePixmap(screen, w, h, depth, usage);
     else
         pixmap = fbCreatePixmap(screen, 0, 0, depth, usage);
-
-    if (depth == 8 && usage != GLAMOR_CREATE_FBO_NO_FBO) {
-	ErrorF("Mali gpu can't support fbo with depth == 8, force set GLAMOR_CREATE_FBO_NO_FBO\n");
-	usage = GLAMOR_CREATE_FBO_NO_FBO;
-    }
 
     pixmap_priv = glamor_get_pixmap_private(pixmap);
 
@@ -888,8 +886,8 @@ void glamor_flush()
 {
     GLint fbo = 0;
     glGetIntegerv(GL_FRAMEBUFFER_BINDING, &fbo);
-    if(1 == fbo) {
+    if(0 != fbo) {
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        glBindFramebuffer(GL_FRAMEBUFFER, 1);
+        glBindFramebuffer(GL_FRAMEBUFFER, fbo);
     }
 }
