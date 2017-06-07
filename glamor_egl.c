@@ -298,11 +298,15 @@ glamor_egl_create_textured_pixmap_from_gbm_bo(PixmapPtr pixmap,
     ScrnInfoPtr scrn = xf86ScreenToScrn(screen);
     struct glamor_screen_private *glamor_priv =
         glamor_get_screen_private(screen);
+    struct glamor_pixmap_private *pixmap_priv =
+        glamor_get_pixmap_private(pixmap);
     struct glamor_egl_screen_private *glamor_egl;
     EGLImageKHR image;
     GLuint texture;
     Bool ret = FALSE;
 
+    if (pixmap_priv->bo)
+    	gbm_bo_unref(pixmap_priv->bo);
     glamor_egl = glamor_egl_get_screen_private(scrn);
 
     glamor_make_current(glamor_priv);
@@ -315,6 +319,8 @@ glamor_egl_create_textured_pixmap_from_gbm_bo(PixmapPtr pixmap,
         goto done;
     }
     glamor_create_texture_from_image(screen, image, &texture);
+    pixmap_priv->bo = bo;
+    gbm_bo_ref(bo);
     glamor_set_pixmap_type(pixmap, GLAMOR_TEXTURE_DRM);
     glamor_set_pixmap_texture(pixmap, texture);
     glamor_egl_set_pixmap_image(pixmap, image);
@@ -387,6 +393,7 @@ glamor_make_pixmap_exportable(PixmapPtr pixmap)
         gbm_bo_destroy(bo);
         return FALSE;
     }
+    pixmap->devKind = gbm_bo_get_stride(bo);
     gbm_bo_destroy(bo);
 
     scratch_gc = GetScratchGC(pixmap->drawable.depth, screen);
@@ -419,9 +426,12 @@ glamor_gbm_bo_from_pixmap(ScreenPtr screen, PixmapPtr pixmap)
 
     if (!glamor_make_pixmap_exportable(pixmap))
         return NULL;
-
+    gbm_bo_ref(pixmap_priv->bo);
+    return pixmap_priv->bo;
+#if 0
     return gbm_bo_import(glamor_egl->gbm, GBM_BO_IMPORT_EGL_IMAGE,
                          pixmap_priv->image, 0);
+#endif
 }
 
 int
@@ -542,6 +552,9 @@ glamor_egl_destroy_pixmap(PixmapPtr pixmap)
 
         if (pixmap_priv->image)
             eglDestroyImageKHR(glamor_egl->display, pixmap_priv->image);
+
+        if (pixmap_priv->bo)
+		    gbm_bo_destroy(pixmap_priv->bo);
     }
 
     screen->DestroyPixmap = glamor_egl->saved_destroy_pixmap;
@@ -560,12 +573,16 @@ glamor_egl_exchange_buffers(PixmapPtr front, PixmapPtr back)
         glamor_get_pixmap_private(front);
     struct glamor_pixmap_private *back_priv =
         glamor_get_pixmap_private(back);
+    struct gbm_bo *temp_bo;
 
     glamor_pixmap_exchange_fbos(front, back);
 
     temp = back_priv->image;
     back_priv->image = front_priv->image;
     front_priv->image = temp;
+    temp_bo = back_priv->bo;
+    back_priv->bo = front_priv->bo;
+    front_priv->bo = temp_bo;
 
     glamor_set_pixmap_type(front, GLAMOR_TEXTURE_DRM);
     glamor_set_pixmap_type(back, GLAMOR_TEXTURE_DRM);
