@@ -367,6 +367,8 @@ glamor_upload_picture_to_texture(PicturePtr picture)
         ret = FALSE;
     }
 
+    glamor_flush();
+
 fail:
     if (converted_image)
         pixman_image_unref(converted_image);
