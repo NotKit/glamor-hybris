@@ -226,7 +226,6 @@ glamor_dash_loop(DrawablePtr drawable, GCPtr gc, glamor_program *prog,
             glDrawArrays(mode, 0, n);
         }
     }
-    glamor_flush();
 
     glDisable(GL_SCISSOR_TEST);
     glDisableVertexAttribArray(GLAMOR_VERTEX_POS);

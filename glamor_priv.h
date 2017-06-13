@@ -872,7 +872,6 @@ void
 glamor_solid_boxes(PixmapPtr pixmap,
                    BoxPtr box, int nbox, unsigned long fg_pixel);
 
-void glamor_flush();
 
 /* glamor_xv */
 typedef struct {

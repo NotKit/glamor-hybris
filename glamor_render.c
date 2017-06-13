@@ -662,7 +662,6 @@ glamor_flush_composite_rects(ScreenPtr screen)
         return;
 
     glamor_glDrawArrays_GL_QUADS(glamor_priv, glamor_priv->render_nr_quads);
-    glamor_flush();
 }
 
 static const int pict_format_combine_tab[][3] = {

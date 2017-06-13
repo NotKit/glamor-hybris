@@ -739,6 +739,11 @@ glamor_glDrawArrays_GL_QUADS(glamor_screen_private *glamor_priv, unsigned count)
         glDrawArrays(GL_QUADS, 0, count * 4);
     } else {
         glamor_gldrawarrays_quads_using_indices(glamor_priv, count);
+	/*
+	 * FIXME:
+	 * glFinish is slow, is there a better way to do gl comand flush? 
+	 */
+	glFinish();
     }
 }
 

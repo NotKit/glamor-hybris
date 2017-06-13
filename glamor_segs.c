@@ -107,7 +107,6 @@ glamor_poly_segment_solid_gl(DrawablePtr drawable, GCPtr gc,
             glDrawArrays(GL_LINES, 0, nseg << (1 + add_last));
         }
     }
-    glamor_flush();
 
     glDisable(GL_SCISSOR_TEST);
     glDisableVertexAttribArray(GLAMOR_VERTEX_POS);

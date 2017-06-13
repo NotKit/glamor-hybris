@@ -883,12 +883,11 @@ glamor_name_from_pixmap(PixmapPtr pixmap, CARD16 *stride, CARD32 *size)
     return -1;
 }
 
-void glamor_flush()
+void
+glamor_finish(ScreenPtr screen)
 {
-    GLint fbo = 0;
-    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &fbo);
-    if(0 != fbo) {
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-    }
+    glamor_screen_private *glamor_priv = glamor_get_screen_private(screen);
+
+    glamor_make_current(glamor_priv);
+    glFinish();
 }

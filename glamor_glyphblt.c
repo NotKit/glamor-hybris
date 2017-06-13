@@ -137,7 +137,6 @@ glamor_poly_glyph_blt_gl(DrawablePtr drawable, GCPtr gc,
             glDrawArrays(GL_POINTS, 0, num_points);
         }
     }
-    glamor_flush();
 
     glDisableVertexAttribArray(GLAMOR_VERTEX_POS);
 
@@ -227,7 +226,6 @@ glamor_push_pixels_gl(GCPtr gc, PixmapPtr bitmap,
 
         glDrawArrays(GL_POINTS, 0, num_points);
     }
-    glamor_flush();
 
     glDisableVertexAttribArray(GLAMOR_VERTEX_POS);
     return TRUE;

@@ -139,7 +139,6 @@ glamor_fill_spans_gl(DrawablePtr drawable,
             }
         }
     }
-    glamor_flush();
 
     glDisable(GL_SCISSOR_TEST);
     if (glamor_priv->glsl_version >= 130)
