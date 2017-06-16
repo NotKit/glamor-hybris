@@ -740,12 +740,12 @@ glamor_glDrawArrays_GL_QUADS(glamor_screen_private *glamor_priv, unsigned count)
     } else {
         glamor_gldrawarrays_quads_using_indices(glamor_priv, count);
 
-		GLint fbo = 0;
-		glGetIntegerv(GL_FRAMEBUFFER_BINDING, &fbo);
-		if(0 != fbo) {
-			glBindFramebuffer(GL_FRAMEBUFFER, 0);
-			glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-		}
+		// GLint fbo = 0;
+		// glGetIntegerv(GL_FRAMEBUFFER_BINDING, &fbo);
+		// if(0 != fbo) {
+		// 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+		// 	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+		// }
     }
 }
 
