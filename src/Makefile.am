@@ -1,4 +1,5 @@
 noinst_LTLIBRARIES = libglamor.la libglamor_egl_stubs.la
+module_LTLIBRARIES = libglamoregl.la
 
 libglamor_la_LIBADD = $(GLAMOR_LIBS)
 
@@ -57,5 +58,20 @@ endif
 libglamor_egl_stubs_la_SOURCES = \
 	glamor_egl_stubs.c \
 	glamor_egl.h
+
+libglamoregl_la_SOURCES = \
+	glamor_egl.c \
+	glamor_eglmodule.c \
+	glamor_xf86_xv.c \
+	$()
+
+libglamoregl_la_LDFLAGS = \
+	-avoid-version \
+	$(GBM_LIBS) \
+	$()
+
+libglamoregl_la_LIBADD = \
+	libglamor.la \
+	$()
 
 sdk_HEADERS = glamor.h

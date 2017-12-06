@@ -27,9 +27,8 @@
  *
  */
 
-#include "dix-config.h"
+#include "config.h"
 
-#define GLAMOR_GLES2
 #define GLAMOR_FOR_XORG
 #include <unistd.h>
 #include <fcntl.h>
@@ -294,6 +293,7 @@ Bool
 glamor_egl_create_textured_pixmap_from_gbm_bo(PixmapPtr pixmap,
                                               struct gbm_bo *bo)
 {
+#ifdef GLAMOR_HAS_GBM
     ScreenPtr screen = pixmap->drawable.pScreen;
     ScrnInfoPtr scrn = xf86ScreenToScrn(screen);
     struct glamor_screen_private *glamor_priv =
@@ -328,6 +328,9 @@ glamor_egl_create_textured_pixmap_from_gbm_bo(PixmapPtr pixmap,
 
  done:
     return ret;
+#else
+    return FALSE;
+#endif
 }
 
 #ifdef GLAMOR_HAS_GBM
@@ -416,6 +419,7 @@ glamor_make_pixmap_exportable(PixmapPtr pixmap)
 #endif
 }
 
+#ifdef GLAMOR_HAS_GBM
 struct gbm_bo *
 glamor_gbm_bo_from_pixmap(ScreenPtr screen, PixmapPtr pixmap)
 {
@@ -433,6 +437,7 @@ glamor_gbm_bo_from_pixmap(ScreenPtr screen, PixmapPtr pixmap)
                          pixmap_priv->image, 0);
 #endif
 }
+#endif
 
 int
 glamor_egl_dri3_fd_name_from_tex(ScreenPtr screen,
@@ -553,8 +558,10 @@ glamor_egl_destroy_pixmap(PixmapPtr pixmap)
         if (pixmap_priv->image)
             eglDestroyImageKHR(glamor_egl->display, pixmap_priv->image);
 
+#ifdef GLAMOR_HAS_GBM
         if (pixmap_priv->bo)
 		    gbm_bo_destroy(pixmap_priv->bo);
+#endif
     }
 
     screen->DestroyPixmap = glamor_egl->saved_destroy_pixmap;
