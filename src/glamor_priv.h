@@ -27,7 +27,7 @@
 #ifndef GLAMOR_PRIV_H
 #define GLAMOR_PRIV_H
 
-#include "dix-config.h"
+#include "config.h"
 
 #include "glamor.h"
 #include "xvdix.h"

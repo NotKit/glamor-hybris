@@ -32,16 +32,14 @@
  * Xv acceleration implementation
  */
 
-#ifdef HAVE_DIX_CONFIG_H
-#include <dix-config.h>
-#endif
+#include <config.h>
 
 #include "glamor_priv.h"
 #include "glamor_transform.h"
 #include "glamor_transfer.h"
 
 #include <X11/extensions/Xv.h>
-#include "../hw/xfree86/common/fourcc.h"
+#include <fourcc.h>
 /* Reference color space transform data */
 typedef struct tagREF_TRANSFORM {
     float RefLuma;

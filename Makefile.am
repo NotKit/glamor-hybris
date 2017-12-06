@@ -1,61 +1,29 @@
-noinst_LTLIBRARIES = libglamor.la libglamor_egl_stubs.la
+#  Copyright 2005 Adam Jackson.
+#
+#  Permission is hereby granted, free of charge, to any person obtaining a
+#  copy of this software and associated documentation files (the "Software"),
+#  to deal in the Software without restriction, including without limitation
+#  on the rights to use, copy, modify, merge, publish, distribute, sub
+#  license, and/or sell copies of the Software, and to permit persons to whom
+#  the Software is furnished to do so, subject to the following conditions:
+#
+#  The above copyright notice and this permission notice (including the next
+#  paragraph) shall be included in all copies or substantial portions of the
+#  Software.
+#
+#  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+#  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+#  FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT.  IN NO EVENT SHALL
+#  ADAM JACKSON BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+#  IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+#  CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-libglamor_la_LIBADD = $(GLAMOR_LIBS)
+SUBDIRS = src
+MAINTAINERCLEANFILES = ChangeLog
 
-AM_CFLAGS = $(CWARNFLAGS) $(DIX_CFLAGS) $(GLAMOR_CFLAGS)
+.PHONY: ChangeLog
 
-libglamor_la_SOURCES = \
-	glamor.c \
-	glamor_context.h \
-	glamor_copy.c \
-	glamor_core.c \
-	glamor_dash.c \
-	glamor_debug.h \
-	glamor_font.c \
-	glamor_font.h \
-	glamor_glx.c \
-	glamor_composite_glyphs.c \
-	glamor_image.c \
-	glamor_lines.c \
-	glamor_segs.c \
-	glamor_render.c \
-	glamor_gradient.c \
-	glamor_prepare.c \
-	glamor_prepare.h \
-	glamor_program.c \
-	glamor_program.h \
-	glamor_rects.c \
-	glamor_spans.c \
-	glamor_text.c \
-	glamor_transfer.c \
-	glamor_transfer.h \
-	glamor_transform.c \
-	glamor_transform.h \
-	glamor_trapezoid.c \
-	glamor_triangles.c\
-	glamor_addtraps.c\
-	glamor_glyphblt.c\
-	glamor_points.c\
-	glamor_priv.h\
-	glamor_pixmap.c\
-	glamor_largepixmap.c\
-	glamor_picture.c\
-	glamor_vbo.c \
-	glamor_window.c\
-	glamor_fbo.c\
-	glamor_compositerects.c\
-	glamor_utils.c\
-	glamor_utils.h\
-	glamor_sync.c \
-	glamor.h
+ChangeLog:
+	$(CHANGELOG_CMD)
 
-if XV
-libglamor_la_SOURCES += \
-	glamor_xv.c
-endif
-
-libglamor_egl_stubs_la_SOURCES = \
-	glamor_egl_stubs.c \
-	glamor_egl.h
-
-sdk_HEADERS = glamor.h
+dist-hook: ChangeLog

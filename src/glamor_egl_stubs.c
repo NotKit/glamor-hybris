@@ -26,7 +26,7 @@
  * Stubbed out glamor_egl.c functions for servers other than Xorg.
  */
 
-#include "dix-config.h"
+#include "config.h"
 
 #include "glamor.h"
 
