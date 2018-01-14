@@ -353,6 +353,7 @@ typedef struct glamor_pixmap_private {
     RegionRec prepare_region;
     Bool prepared;
     EGLImageKHR image;
+    EGLClientBuffer buf;
 
     /** block width of this large pixmap. */
     int block_w;

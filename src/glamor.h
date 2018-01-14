@@ -273,6 +273,7 @@ extern _X_EXPORT Bool glamor_back_pixmap_from_fd(PixmapPtr pixmap,
 #ifdef GLAMOR_FOR_XORG
 
 #define GLAMOR_EGL_MODULE_NAME  "glamoregl"
+#define GLAMOR_EGLHYBRIS_MODULE_NAME  "glamoreglhybris"
 
 /* @glamor_egl_init: Initialize EGL environment.
  *
@@ -284,6 +285,22 @@ extern _X_EXPORT Bool glamor_back_pixmap_from_fd(PixmapPtr pixmap,
  * Return TRUE if success, otherwise return FALSE.
  * */
 extern _X_EXPORT Bool glamor_egl_init(ScrnInfoPtr scrn, int fd);
+
+/* @hwc_glamor_egl_init: Initialize EGL environment when running with HWComposer
+ *
+ * @scrn: Current screen info pointer.
+ * @display:   Current EGL display.
+ * @context:   Current EGL context.
+ * @surface:   Current EGL drawable surface.
+ *
+ * This function creates and intialize EGL contexts.
+ * Should be called from DDX's preInit function.
+ * Return TRUE if success, otherwise return FALSE.
+ * */
+typedef void *EGLDisplay;
+typedef void *EGLSurface;
+typedef void *EGLContext;
+extern _X_EXPORT Bool hwc_glamor_egl_init(ScrnInfoPtr scrn, EGLDisplay display, EGLContext context, EGLSurface surface);
 
 extern _X_EXPORT Bool glamor_egl_init_textured_pixmap(ScreenPtr screen);
 

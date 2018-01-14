@@ -49,6 +49,12 @@
 #include "glamor_priv.h"
 #include "dri3.h"
 
+#define DRIHYBRIS
+#ifdef DRIHYBRIS
+#include "drihybris.h"
+#include <hybris/eglplatformcommon/hybris_nativebufferext.h>
+#endif
+
 static const char glamor_name[] = "glamor";
 
 static void
@@ -61,6 +67,7 @@ glamor_identify(int flags)
 struct glamor_egl_screen_private {
     EGLDisplay display;
     EGLContext context;
+    EGLSurface surface;
     EGLint major, minor;
     char *device_path;
 
@@ -74,6 +81,15 @@ struct glamor_egl_screen_private {
     int has_gem;
     int gl_context_depth;
     int dri3_capable;
+    int drihybris_capable;
+
+#ifdef DRIHYBRIS
+    PFNEGLHYBRISCREATENATIVEBUFFERPROC eglHybrisCreateNativeBuffer;
+    PFNEGLHYBRISLOCKNATIVEBUFFERPROC eglHybrisLockNativeBuffer;
+    PFNEGLHYBRISUNLOCKNATIVEBUFFERPROC eglHybrisUnlockNativeBuffer;
+    PFNEGLHYBRISRELEASENATIVEBUFFERPROC eglHybrisReleaseNativeBuffer;
+    PFNEGLHYBRISCREATEREMOTEBUFFERPROC eglHybrisCreateRemoteBuffer;
+#endif
 
     CloseScreenProcPtr saved_close_screen;
     DestroyPixmapProcPtr saved_destroy_pixmap;
@@ -103,7 +119,7 @@ glamor_egl_make_current(struct glamor_context *glamor_ctx)
                    EGL_NO_SURFACE, EGL_NO_CONTEXT);
 
     if (!eglMakeCurrent(glamor_ctx->display,
-                        EGL_NO_SURFACE, EGL_NO_SURFACE,
+                        glamor_ctx->drawable, glamor_ctx->drawable,
                         glamor_ctx->ctx)) {
         FatalError("Failed to make EGL context current\n");
     }
@@ -289,11 +305,11 @@ glamor_egl_create_textured_pixmap(PixmapPtr pixmap, int handle, int stride)
     return ret;
 }
 
+#ifdef GLAMOR_HAS_GBM
 Bool
 glamor_egl_create_textured_pixmap_from_gbm_bo(PixmapPtr pixmap,
                                               struct gbm_bo *bo)
 {
-#ifdef GLAMOR_HAS_GBM
     ScreenPtr screen = pixmap->drawable.pScreen;
     ScrnInfoPtr scrn = xf86ScreenToScrn(screen);
     struct glamor_screen_private *glamor_priv =
@@ -328,12 +344,8 @@ glamor_egl_create_textured_pixmap_from_gbm_bo(PixmapPtr pixmap,
 
  done:
     return ret;
-#else
-    return FALSE;
-#endif
 }
 
-#ifdef GLAMOR_HAS_GBM
 static void
 glamor_get_name_from_bo(int gbm_fd, struct gbm_bo *bo, int *name)
 {
@@ -675,6 +687,142 @@ static dri3_screen_info_rec glamor_dri3_info = {
 };
 #endif /* DRI3 */
 
+#ifdef DRIHYBRIS
+Bool
+glamor_egl_create_textured_pixmap_from_egl_buffer(PixmapPtr pixmap,
+                                              EGLClientBuffer buf)
+{
+    ScreenPtr screen = pixmap->drawable.pScreen;
+    ScrnInfoPtr scrn = xf86ScreenToScrn(screen);
+    struct glamor_screen_private *glamor_priv =
+        glamor_get_screen_private(screen);
+    struct glamor_pixmap_private *pixmap_priv =
+        glamor_get_pixmap_private(pixmap);
+    struct glamor_egl_screen_private *glamor_egl;
+    EGLImageKHR image;
+    GLuint texture;
+    Bool ret = FALSE;
+
+    glamor_egl = glamor_egl_get_screen_private(scrn);
+
+    if (pixmap_priv->buf)
+        glamor_egl->eglHybrisReleaseNativeBuffer(pixmap_priv->buf);
+
+    glamor_make_current(glamor_priv);
+
+    image = eglCreateImageKHR(glamor_egl->display,
+                              /* glamor_egl->context*/ EGL_NO_CONTEXT,
+                              EGL_NATIVE_BUFFER_HYBRIS, buf, NULL);
+    if (image == EGL_NO_IMAGE_KHR) {
+        glamor_set_pixmap_type(pixmap, GLAMOR_DRM_ONLY);
+        goto done;
+    }
+    printf("Created EGLImageKHR for EGLClientBuffer\n");
+    glamor_create_texture_from_image(screen, image, &texture);
+    pixmap_priv->buf = buf;
+
+    glamor_set_pixmap_type(pixmap, GLAMOR_TEXTURE_DRM);
+    glamor_set_pixmap_texture(pixmap, texture);
+    glamor_egl_set_pixmap_image(pixmap, image);
+    ret = TRUE;
+
+ done:
+    return ret;
+}
+
+_X_EXPORT Bool
+glamor_back_pixmap_from_hybris_buffer(PixmapPtr pixmap,
+                           CARD16 width,
+                           CARD16 height,
+                           CARD16 stride, CARD8 depth, CARD8 bpp,
+                           int numInts, int *ints,
+                           int numFds, int *fds)
+{
+    ScreenPtr screen = pixmap->drawable.pScreen;
+    ScrnInfoPtr scrn = xf86ScreenToScrn(screen);
+    struct glamor_egl_screen_private *glamor_egl;
+    Bool ret;
+
+    glamor_egl = glamor_egl_get_screen_private(scrn);
+
+    if (bpp != 32 || !(depth == 24 || depth == 32) || width == 0 || height == 0)
+        return FALSE;
+
+    EGLClientBuffer buf;
+    printf("Trying to back pixmap from hybris buffer\n");
+    glamor_egl->eglHybrisCreateRemoteBuffer(width, height, HYBRIS_USAGE_HW_TEXTURE,
+                                            HYBRIS_PIXEL_FORMAT_RGBA_8888, stride,
+                                            numInts, ints, numFds, fds, &buf);
+
+    screen->ModifyPixmapHeader(pixmap, width, height, 0, 0, stride, NULL);
+
+    ret = glamor_egl_create_textured_pixmap_from_egl_buffer(pixmap, buf);
+    return ret;
+}
+
+_X_EXPORT PixmapPtr
+glamor_pixmap_from_hybris_buffer(ScreenPtr screen,
+                      CARD16 width,
+                      CARD16 height,
+                      CARD16 stride, CARD8 depth, CARD8 bpp,
+                      int numInts, int *ints,
+                      int numFds, int *fds)
+{
+    PixmapPtr pixmap;
+    Bool ret;
+
+    pixmap = screen->CreatePixmap(screen, 0, 0, depth, 0);
+    ret = glamor_back_pixmap_from_hybris_buffer(pixmap, width, height,
+                                     stride, depth, bpp,
+                                     numInts, ints,
+                                     numFds, fds);
+    if (ret == FALSE) {
+        screen->DestroyPixmap(pixmap);
+        return NULL;
+    }
+    return pixmap;
+}
+
+static drihybris_screen_info_rec glamor_drihybris_info = {
+    .version = 1,
+    .pixmap_from_buffer = glamor_pixmap_from_hybris_buffer,
+    .fd_from_pixmap = glamor_fd_from_pixmap,
+};
+
+Bool hwc_init_hybris_native_buffer(ScrnInfoPtr scrn)
+{
+    struct glamor_egl_screen_private *glamor_egl;
+
+    glamor_egl = glamor_egl_get_screen_private(scrn);
+
+    if (strstr(eglQueryString(glamor_egl->display, EGL_EXTENSIONS), "EGL_HYBRIS_native_buffer") == NULL)
+    {
+        xf86DrvMsg(scrn->scrnIndex, X_ERROR, "EGL_HYBRIS_native_buffer is missing. Make sure libhybris EGL implementation is used\n");
+        return FALSE;
+    }
+
+    glamor_egl->eglHybrisCreateNativeBuffer = (PFNEGLHYBRISCREATENATIVEBUFFERPROC) eglGetProcAddress("eglHybrisCreateNativeBuffer");
+    assert(glamor_egl->eglHybrisCreateNativeBuffer != NULL);
+
+    glamor_egl->eglHybrisCreateRemoteBuffer = (PFNEGLHYBRISCREATEREMOTEBUFFERPROC) eglGetProcAddress("eglHybrisCreateRemoteBuffer");
+    assert(glamor_egl->eglHybrisCreateRemoteBuffer != NULL);
+
+    glamor_egl->eglHybrisLockNativeBuffer = (PFNEGLHYBRISLOCKNATIVEBUFFERPROC) eglGetProcAddress("eglHybrisLockNativeBuffer");
+    assert(glamor_egl->eglHybrisLockNativeBuffer != NULL);
+
+    glamor_egl->eglHybrisUnlockNativeBuffer = (PFNEGLHYBRISUNLOCKNATIVEBUFFERPROC) eglGetProcAddress("eglHybrisUnlockNativeBuffer");
+    assert(glamor_egl->eglHybrisUnlockNativeBuffer != NULL);
+
+    glamor_egl->eglHybrisReleaseNativeBuffer = (PFNEGLHYBRISRELEASENATIVEBUFFERPROC) eglGetProcAddress("eglHybrisReleaseNativeBuffer");
+    assert(glamor_egl->eglHybrisReleaseNativeBuffer != NULL);
+
+    glamor_egl->eglHybrisReleaseNativeBuffer = (PFNEGLHYBRISRELEASENATIVEBUFFERPROC) eglGetProcAddress("eglHybrisReleaseNativeBuffer");
+    assert(glamor_egl->eglHybrisReleaseNativeBuffer != NULL);
+
+    return TRUE;
+}
+#endif
+
 void
 glamor_egl_screen_init(ScreenPtr screen, struct glamor_context *glamor_ctx)
 {
@@ -690,6 +838,7 @@ glamor_egl_screen_init(ScreenPtr screen, struct glamor_context *glamor_ctx)
 
     glamor_ctx->ctx = glamor_egl->context;
     glamor_ctx->display = glamor_egl->display;
+    glamor_ctx->drawable = glamor_egl->surface;
 
     glamor_ctx->make_current = glamor_egl_make_current;
 
@@ -716,6 +865,15 @@ glamor_egl_screen_init(ScreenPtr screen, struct glamor_context *glamor_ctx)
                 xf86DrvMsg(scrn->scrnIndex, X_ERROR,
                            "Failed to initialize DRI3.\n");
             }
+        }
+    }
+#endif
+
+#ifdef DRIHYBRIS
+    if (glamor_egl->drihybris_capable) {
+        if (!drihybris_screen_init(screen, &glamor_drihybris_info)) {
+            xf86DrvMsg(scrn->scrnIndex, X_ERROR,
+                        "Failed to initialize DRIHYBRIS.\n");
         }
     }
 #endif
@@ -851,7 +1009,7 @@ glamor_egl_init(ScrnInfoPtr scrn, int fd)
 
     GLAMOR_CHECK_EGL_EXTENSION(KHR_gl_renderbuffer_image);
 #ifdef GLAMOR_GLES2
- GLAMOR_CHECK_EGL_EXTENSION(KHR_surfaceless_context);
+    GLAMOR_CHECK_EGL_EXTENSION(KHR_surfaceless_context);
     GLAMOR_CHECK_EGL_EXTENSION(KHR_surfaceless_gles2);
 //    GLAMOR_CHECK_EGL_EXTENSIONS(KHR_surfaceless_context, KHR_surfaceless_gles2);
 #else
@@ -883,6 +1041,7 @@ glamor_egl_init(ScrnInfoPtr scrn, int fd)
         xf86DrvMsg(scrn->scrnIndex, X_ERROR, "Failed to create EGL context\n");
         goto error;
     }
+    glamor_egl->surface = EGL_NO_SURFACE;
 
     if (!eglMakeCurrent(glamor_egl->display,
                         EGL_NO_SURFACE, EGL_NO_SURFACE, glamor_egl->context)) {
@@ -900,6 +1059,78 @@ glamor_egl_init(ScrnInfoPtr scrn, int fd)
                                 "EGL_KHR_gl_texture_2D_image") &&
         epoxy_has_gl_extension("GL_OES_EGL_image"))
         glamor_egl->dri3_capable = TRUE;
+#endif
+
+    glamor_egl->saved_free_screen = scrn->FreeScreen;
+    scrn->FreeScreen = glamor_egl_free_screen;
+#ifdef GLAMOR_GLES2
+    xf86DrvMsg(scrn->scrnIndex, X_INFO, "Using GLES2.\n");
+    xf86DrvMsg(scrn->scrnIndex, X_WARNING,
+               "Glamor is using GLES2 but GLX needs GL. "
+               "Indirect GLX may not work correctly.\n");
+#endif
+    return TRUE;
+
+error:
+    glamor_egl_cleanup(glamor_egl);
+    return FALSE;
+}
+
+Bool
+hwc_glamor_egl_init(ScrnInfoPtr scrn, EGLDisplay display, EGLContext context, EGLSurface surface)
+{
+    struct glamor_egl_screen_private *glamor_egl;
+    const char *version;
+
+    glamor_identify(0);
+    glamor_egl = calloc(sizeof(*glamor_egl), 1);
+    if (glamor_egl == NULL)
+        return FALSE;
+    if (xf86GlamorEGLPrivateIndex == -1)
+        xf86GlamorEGLPrivateIndex = xf86AllocateScrnInfoPrivateIndex();
+
+    scrn->privates[xf86GlamorEGLPrivateIndex].ptr = glamor_egl;
+
+    glamor_egl->display = display;
+
+    version = eglQueryString(glamor_egl->display, EGL_VERSION);
+    xf86Msg(X_INFO, "%s: EGL version %s:\n", glamor_name, version);
+
+    GLAMOR_CHECK_EGL_EXTENSION(KHR_gl_renderbuffer_image);
+#ifdef GLAMOR_GLES2
+    GLAMOR_CHECK_EGL_EXTENSION(KHR_surfaceless_context);
+#endif
+
+    glamor_egl->context = context;
+    glamor_egl->surface = surface;
+
+    if (glamor_egl->context == EGL_NO_CONTEXT) {
+        xf86DrvMsg(scrn->scrnIndex, X_ERROR, "Failed to create EGL context\n");
+        goto error;
+    }
+
+    if (!eglMakeCurrent(glamor_egl->display,
+                        glamor_egl->surface, glamor_egl->surface,
+                        glamor_egl->context)) {
+        xf86DrvMsg(scrn->scrnIndex, X_ERROR,
+                   "Failed to make EGL context currentgl%x egl%x\n", glGetError(), eglGetError());
+        goto error;
+    }
+    /*
+     * Force the next glamor_make_current call to set the right context
+     * (in case of multiple GPUs using glamor)
+     */
+    lastGLContext = NULL;
+#ifdef GLAMOR_HAS_GBM
+    if (epoxy_has_egl_extension(glamor_egl->display,
+                                "EGL_KHR_gl_texture_2D_image") &&
+        epoxy_has_gl_extension("GL_OES_EGL_image"))
+        glamor_egl->dri3_capable = TRUE;
+#endif
+
+#ifdef DRIHYBRIS
+    if (hwc_init_hybris_native_buffer(scrn))
+        glamor_egl->drihybris_capable = TRUE;
 #endif
 
     glamor_egl->saved_free_screen = scrn->FreeScreen;

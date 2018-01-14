@@ -35,7 +35,7 @@
 #include "glamor.h"
 
 static XF86ModuleVersionInfo VersRec = {
-    GLAMOR_EGL_MODULE_NAME,
+    GLAMOR_EGLHYBRIS_MODULE_NAME,
     MODULEVENDORSTRING,
     MODINFOSTRING1,
     MODINFOSTRING2,
@@ -47,4 +47,4 @@ static XF86ModuleVersionInfo VersRec = {
     {0, 0, 0, 0}                /* signature, to be patched into the file by a tool */
 };
 
-_X_EXPORT XF86ModuleData glamoreglModuleData = { &VersRec, NULL, NULL };
+_X_EXPORT XF86ModuleData glamoreglhybrisModuleData = { &VersRec, NULL, NULL };
