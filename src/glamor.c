@@ -189,7 +189,7 @@ glamor_create_pixmap(ScreenPtr screen, int w, int h, int depth,
     if (w > 32767 || h > 32767)
         return NullPixmap;
 
-    if (depth == 8 && usage != GLAMOR_CREATE_FBO_NO_FBO ||
+    if ((depth == 8 && usage != GLAMOR_CREATE_FBO_NO_FBO) ||
 	(w == h && w == 24 && depth == 32)) {
         return fbCreatePixmap(screen, w, h, depth, usage);
     }
@@ -878,5 +878,5 @@ glamor_finish(ScreenPtr screen)
     glamor_screen_private *glamor_priv = glamor_get_screen_private(screen);
 
     glamor_make_current(glamor_priv);
-    glFinish();
+    glamor_flush();
 }
