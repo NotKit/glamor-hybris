@@ -89,6 +89,8 @@ struct glamor_egl_screen_private {
     PFNEGLHYBRISUNLOCKNATIVEBUFFERPROC eglHybrisUnlockNativeBuffer;
     PFNEGLHYBRISRELEASENATIVEBUFFERPROC eglHybrisReleaseNativeBuffer;
     PFNEGLHYBRISCREATEREMOTEBUFFERPROC eglHybrisCreateRemoteBuffer;
+    PFNEGLHYBRISGETNATIVEBUFFERINFOPROC eglHybrisGetNativeBufferInfo;
+    PFNEGLHYBRISSERIALIZENATIVEBUFFERPROC eglHybrisSerializeNativeBuffer;
 #endif
 
     CloseScreenProcPtr saved_close_screen;
@@ -593,6 +595,7 @@ glamor_egl_exchange_buffers(PixmapPtr front, PixmapPtr back)
     struct glamor_pixmap_private *back_priv =
         glamor_get_pixmap_private(back);
     struct gbm_bo *temp_bo;
+    EGLClientBuffer temp_buf;
 
     glamor_pixmap_exchange_fbos(front, back);
 
@@ -602,6 +605,10 @@ glamor_egl_exchange_buffers(PixmapPtr front, PixmapPtr back)
     temp_bo = back_priv->bo;
     back_priv->bo = front_priv->bo;
     front_priv->bo = temp_bo;
+
+    temp_buf = back_priv->buf;
+    back_priv->buf = front_priv->buf;
+    front_priv->buf = temp_buf;
 
     glamor_set_pixmap_type(front, GLAMOR_TEXTURE_DRM);
     glamor_set_pixmap_type(back, GLAMOR_TEXTURE_DRM);
@@ -717,7 +724,7 @@ glamor_egl_create_textured_pixmap_from_egl_buffer(PixmapPtr pixmap,
         glamor_set_pixmap_type(pixmap, GLAMOR_DRM_ONLY);
         goto done;
     }
-    printf("Created EGLImageKHR for EGLClientBuffer\n");
+
     glamor_create_texture_from_image(screen, image, &texture);
     pixmap_priv->buf = buf;
 
@@ -749,7 +756,6 @@ glamor_back_pixmap_from_hybris_buffer(PixmapPtr pixmap,
         return FALSE;
 
     EGLClientBuffer buf;
-    printf("Trying to back pixmap from hybris buffer\n");
     glamor_egl->eglHybrisCreateRemoteBuffer(width, height, HYBRIS_USAGE_HW_TEXTURE,
                                             HYBRIS_PIXEL_FORMAT_RGBA_8888, stride,
                                             numInts, ints, numFds, fds, &buf);
@@ -783,10 +789,110 @@ glamor_pixmap_from_hybris_buffer(ScreenPtr screen,
     return pixmap;
 }
 
+static Bool
+glamor_hybris_make_pixmap_exportable(PixmapPtr pixmap)
+{
+    ScreenPtr screen = pixmap->drawable.pScreen;
+    ScrnInfoPtr scrn = xf86ScreenToScrn(screen);
+    struct glamor_egl_screen_private *glamor_egl =
+        glamor_egl_get_screen_private(scrn);
+    struct glamor_pixmap_private *pixmap_priv =
+        glamor_get_pixmap_private(pixmap);
+    unsigned width = pixmap->drawable.width;
+    unsigned height = pixmap->drawable.height;
+    PixmapPtr exported;
+    GCPtr scratch_gc;
+    int stride;
+    int err;
+
+    if (pixmap_priv->image)
+        return TRUE;
+
+    if (pixmap->drawable.bitsPerPixel != 32) {
+        xf86DrvMsg(scrn->scrnIndex, X_ERROR,
+                   "Failed to make %dbpp pixmap exportable\n",
+                   pixmap->drawable.bitsPerPixel);
+        return FALSE;
+    }
+
+    EGLClientBuffer buf;
+    err = glamor_egl->eglHybrisCreateNativeBuffer(width, height,
+                                      HYBRIS_USAGE_HW_TEXTURE |
+                                      HYBRIS_USAGE_SW_READ_NEVER | HYBRIS_USAGE_SW_WRITE_NEVER,
+                                      HYBRIS_PIXEL_FORMAT_RGBA_8888,
+                                      &stride, &buf);
+
+    exported = screen->CreatePixmap(screen, 0, 0, pixmap->drawable.depth, 0);
+    screen->ModifyPixmapHeader(exported, width, height, 0, 0,
+                               stride, NULL);
+    if (!glamor_egl_create_textured_pixmap_from_egl_buffer(exported, buf)) {
+        xf86DrvMsg(scrn->scrnIndex, X_ERROR,
+                   "Failed to make %dx%dx%dbpp pixmap from EGLClientBuffer\n",
+                   width, height, pixmap->drawable.bitsPerPixel);
+        screen->DestroyPixmap(exported);
+        glamor_egl->eglHybrisReleaseNativeBuffer(buf);
+        return FALSE;
+    }
+
+    scratch_gc = GetScratchGC(pixmap->drawable.depth, screen);
+    ValidateGC(&pixmap->drawable, scratch_gc);
+    scratch_gc->ops->CopyArea(&pixmap->drawable, &exported->drawable,
+                              scratch_gc,
+                              0, 0, width, height, 0, 0);
+    FreeScratchGC(scratch_gc);
+
+    /* Now, swap the tex/gbm/EGLImage/etc. of the exported pixmap into
+     * the original pixmap struct.
+     */
+    glamor_egl_exchange_buffers(pixmap, exported);
+
+    screen->DestroyPixmap(exported);
+
+    return TRUE;
+}
+
+_X_EXPORT int
+glamor_hybris_buffer_from_pixmap(ScreenPtr screen,
+                            PixmapPtr pixmap, CARD16 *stride,
+                            int *numInts, int **ints,
+                            int *numFds, int **fds)
+{
+    glamor_pixmap_private *pixmap_priv = glamor_get_pixmap_private(pixmap);
+    glamor_screen_private *glamor_priv =
+        glamor_get_screen_private(pixmap->drawable.pScreen);
+    struct glamor_egl_screen_private *glamor_egl =
+        glamor_egl_get_screen_private(xf86ScreenToScrn(screen));
+
+    unsigned int tex;
+
+    switch (pixmap_priv->type) {
+    case GLAMOR_TEXTURE_DRM:
+    case GLAMOR_TEXTURE_ONLY:
+        if (!glamor_pixmap_ensure_fbo(pixmap, GL_RGBA, 0))
+            return -1;
+
+        if (!glamor_hybris_make_pixmap_exportable(pixmap))
+            return -1;
+
+        glamor_egl->eglHybrisGetNativeBufferInfo(pixmap_priv->buf, numInts, numFds);
+
+        *ints = malloc(*numInts * sizeof(int));
+        *fds = malloc(*numFds * sizeof(int));
+
+        glamor_egl->eglHybrisSerializeNativeBuffer(pixmap_priv->buf, *ints, *fds);
+
+        return 0;
+
+    default:
+        break;
+    }
+    return -1;
+}
+
 static drihybris_screen_info_rec glamor_drihybris_info = {
     .version = 1,
     .pixmap_from_buffer = glamor_pixmap_from_hybris_buffer,
-    .fd_from_pixmap = glamor_fd_from_pixmap,
+    .buffer_from_pixmap = glamor_hybris_buffer_from_pixmap,
 };
 
 Bool hwc_init_hybris_native_buffer(ScrnInfoPtr scrn)
@@ -818,6 +924,12 @@ Bool hwc_init_hybris_native_buffer(ScrnInfoPtr scrn)
 
     glamor_egl->eglHybrisReleaseNativeBuffer = (PFNEGLHYBRISRELEASENATIVEBUFFERPROC) eglGetProcAddress("eglHybrisReleaseNativeBuffer");
     assert(glamor_egl->eglHybrisReleaseNativeBuffer != NULL);
+
+    glamor_egl->eglHybrisGetNativeBufferInfo = (PFNEGLHYBRISGETNATIVEBUFFERINFOPROC) eglGetProcAddress("eglHybrisGetNativeBufferInfo");
+    assert(glamor_egl->eglHybrisGetNativeBufferInfo != NULL);
+
+    glamor_egl->eglHybrisSerializeNativeBuffer = (PFNEGLHYBRISSERIALIZENATIVEBUFFERPROC) eglGetProcAddress("eglHybrisSerializeNativeBuffer");
+    assert(glamor_egl->eglHybrisSerializeNativeBuffer != NULL);
 
     return TRUE;
 }
