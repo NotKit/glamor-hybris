@@ -30,16 +30,51 @@
 
 #include "glamor.h"
 
+#ifdef GLAMOR_HAS_GBM_MAP
+#include "gbm.h"
+#endif
+
 void
 glamor_egl_screen_init(ScreenPtr screen, struct glamor_context *glamor_ctx)
 {
 }
 
 int
-glamor_egl_dri3_fd_name_from_tex(ScreenPtr screen,
-                                 PixmapPtr pixmap,
-                                 unsigned int tex,
-                                 Bool want_name, CARD16 *stride, CARD32 *size)
+glamor_egl_fd_name_from_pixmap(ScreenPtr screen,
+                               PixmapPtr pixmap,
+                               CARD16 *stride, CARD32 *size)
+{
+    return -1;
+}
+
+
+int
+glamor_egl_fds_from_pixmap(ScreenPtr screen, PixmapPtr pixmap, int *fds,
+                           uint32_t *offsets, uint32_t *strides,
+                           uint64_t *modifier)
 {
     return 0;
 }
+
+int
+glamor_egl_fd_from_pixmap(ScreenPtr screen, PixmapPtr pixmap,
+                          CARD16 *stride, CARD32 *size)
+{
+    return -1;
+}
+
+struct gbm_bo *
+glamor_gbm_bo_from_pixmap(ScreenPtr screen, PixmapPtr pixmap)
+{
+    return NULL;
+}
+
+#ifdef GLAMOR_HAS_GBM_MAP
+__attribute__((weak)) void *
+gbm_bo_map(struct gbm_bo *bo,
+           uint32_t x, uint32_t y, uint32_t width, uint32_t height,
+           uint32_t flags, uint32_t *stride, void **mp_data)
+{
+    return NULL;
+}
+#endif

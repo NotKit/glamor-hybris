@@ -49,6 +49,7 @@ glamor_poly_glyph_blt_gl(DrawablePtr drawable, GCPtr gc,
     glamor_program *prog;
     RegionPtr clip = gc->pCompositeClip;
     int box_index;
+    Bool ret = FALSE;
 
     pixmap_priv = glamor_get_pixmap_private(pixmap);
     if (!GLAMOR_PIXMAP_PRIV_HAS_FBO(pixmap_priv))
@@ -75,8 +76,9 @@ glamor_poly_glyph_blt_gl(DrawablePtr drawable, GCPtr gc,
         int off_x, off_y;
         char *vbo_offset;
 
-        glamor_set_destination_drawable(drawable, box_index, FALSE, TRUE,
-                                        prog->matrix_uniform, &off_x, &off_y);
+        if (!glamor_set_destination_drawable(drawable, box_index, FALSE, TRUE,
+                                              prog->matrix_uniform, &off_x, &off_y))
+            goto bail;
 
         max_points = 500;
         num_points = 0;
@@ -138,11 +140,14 @@ glamor_poly_glyph_blt_gl(DrawablePtr drawable, GCPtr gc,
         }
     }
 
+    glamor_pixmap_invalid(pixmap);
+
+    ret = TRUE;
+
+bail:
     glDisableVertexAttribArray(GLAMOR_VERTEX_POS);
 
-    return TRUE;
-bail:
-    return FALSE;
+    return ret;
 }
 
 void
@@ -150,7 +155,8 @@ glamor_poly_glyph_blt(DrawablePtr drawable, GCPtr gc,
                       int start_x, int y, unsigned int nglyph,
                       CharInfoPtr *ppci, void *pglyph_base)
 {
-    if (glamor_poly_glyph_blt_gl(drawable, gc, start_x, y, nglyph, ppci,
+    if (GLAMOR_PREFER_GL() &&
+        glamor_poly_glyph_blt_gl(drawable, gc, start_x, y, nglyph, ppci,
                                  pglyph_base))
         return;
     miPolyGlyphBlt(drawable, gc, start_x, y, nglyph,
@@ -174,6 +180,7 @@ glamor_push_pixels_gl(GCPtr gc, PixmapPtr bitmap,
     int num_points;
     INT16 *points = NULL;
     char *vbo_offset;
+    Bool ret = FALSE;
 
     if (w * h > MAXINT / (2 * sizeof(float)))
         goto bail;
@@ -221,24 +228,29 @@ glamor_push_pixels_gl(GCPtr gc, PixmapPtr bitmap,
     glamor_put_vbo_space(screen);
 
     glamor_pixmap_loop(pixmap_priv, box_index) {
-        glamor_set_destination_drawable(drawable, box_index, FALSE, TRUE,
-                                        prog->matrix_uniform, NULL, NULL);
+        if (!glamor_set_destination_drawable(drawable, box_index, FALSE, TRUE,
+                                             prog->matrix_uniform, NULL, NULL))
+            goto bail;
 
         glDrawArrays(GL_POINTS, 0, num_points);
     }
 
-    glDisableVertexAttribArray(GLAMOR_VERTEX_POS);
-    return TRUE;
+    glamor_pixmap_invalid(pixmap);
+
+    ret = TRUE;
 
 bail:
-    return FALSE;
+    glDisableVertexAttribArray(GLAMOR_VERTEX_POS);
+
+    return ret;
 }
 
 void
 glamor_push_pixels(GCPtr pGC, PixmapPtr pBitmap,
                    DrawablePtr pDrawable, int w, int h, int x, int y)
 {
-    if (glamor_push_pixels_gl(pGC, pBitmap, pDrawable, w, h, x, y))
+    if (GLAMOR_PREFER_GL() &&
+        glamor_push_pixels_gl(pGC, pBitmap, pDrawable, w, h, x, y))
         return;
 
     miPushPixels(pGC, pBitmap, pDrawable, w, h, x, y);
